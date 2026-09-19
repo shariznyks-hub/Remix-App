@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { MCQOption } from '../types';
+import { MCQOption, MCQQuestionItem } from '../types';
 
 const STORAGE_KEY_ANSWERS = 'mcq_answer_pad_answers_v1';
 const STORAGE_KEY_CONFIG = 'mcq_answer_pad_config_v1';
+const STORAGE_KEY_IMPORTED_QUESTIONS = 'mcq_imported_questions_v1';
 
 export function useMCQState() {
   // Load initial settings
@@ -48,6 +49,22 @@ export function useMCQState() {
   });
 
   const [optionsCount, setOptionsCount] = useState<4>(4);
+
+  // Imported questions list
+  const [importedQuestions, setImportedQuestions] = useState<MCQQuestionItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_IMPORTED_QUESTIONS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  });
 
   // Answers map: { [questionNumber]: 'A' | 'B' | 'C' | 'D' }
   const [answers, setAnswers] = useState<Record<number, MCQOption>>(() => {
@@ -189,6 +206,38 @@ export function useMCQState() {
     setCurrentQuestion(startQuestion);
   }, [startQuestion, triggerHaptic]);
 
+  // Import questions from parsed TXT
+  const importQuestions = useCallback(
+    (questions: MCQQuestionItem[]) => {
+      triggerHaptic();
+      setImportedQuestions(questions);
+      setStartQuestion(1);
+      setTotalQuestions(questions.length);
+      setCurrentQuestion(1);
+      setAnswers({});
+      try {
+        localStorage.setItem(STORAGE_KEY_IMPORTED_QUESTIONS, JSON.stringify(questions));
+      } catch {
+        // ignore
+      }
+    },
+    [triggerHaptic]
+  );
+
+  // Clear imported questions and revert to standard blank answer pad
+  const clearImportedQuestions = useCallback(() => {
+    triggerHaptic();
+    setImportedQuestions([]);
+    setStartQuestion(1);
+    setTotalQuestions(100);
+    setCurrentQuestion(1);
+    try {
+      localStorage.removeItem(STORAGE_KEY_IMPORTED_QUESTIONS);
+    } catch {
+      // ignore
+    }
+  }, [triggerHaptic]);
+
   // Update question range
   const updateRange = useCallback(
     (newStart: number, newTotal: number, _newOptions?: number) => {
@@ -201,6 +250,18 @@ export function useMCQState() {
     },
     []
   );
+
+  // Current active question item (if questions were imported)
+  const activeQuestionItem = useMemo(() => {
+    if (
+      importedQuestions.length > 0 &&
+      currentQuestion >= 1 &&
+      currentQuestion <= importedQuestions.length
+    ) {
+      return importedQuestions[currentQuestion - 1];
+    }
+    return undefined;
+  }, [importedQuestions, currentQuestion]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -238,6 +299,8 @@ export function useMCQState() {
     currentQuestion,
     optionsCount,
     answers,
+    importedQuestions,
+    activeQuestionItem,
     stats,
     answerCurrent,
     skipCurrent,
@@ -246,6 +309,8 @@ export function useMCQState() {
     jumpToQuestion,
     clearCurrentAnswer,
     clearAllAnswers,
+    importQuestions,
+    clearImportedQuestions,
     updateRange,
     setOptionsCount,
   };

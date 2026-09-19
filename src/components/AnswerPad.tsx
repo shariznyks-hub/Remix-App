@@ -1,26 +1,46 @@
 import React, { useEffect } from 'react';
-import { Check, FastForward } from 'lucide-react';
-import { MCQOption } from '../types';
+import { Check, FastForward, FileText } from 'lucide-react';
+import { MCQOption, MCQQuestionItem } from '../types';
 
 interface AnswerPadProps {
   optionsCount?: number;
   currentAnswer?: MCQOption;
+  activeQuestion?: MCQQuestionItem;
+  currentQuestionNumber: number;
   onSelectOption: (option: MCQOption) => void;
   onSkip: () => void;
   onPrevious: () => void;
   onNext: () => void;
+  onOpenImport?: () => void;
 }
 
 const ALL_OPTIONS: MCQOption[] = ['A', 'B', 'C', 'D'];
 
 export const AnswerPad: React.FC<AnswerPadProps> = ({
   currentAnswer,
+  activeQuestion,
+  currentQuestionNumber,
   onSelectOption,
   onSkip,
   onPrevious,
   onNext,
+  onOpenImport,
 }) => {
   const options = ALL_OPTIONS;
+
+  const getOptionText = (opt: MCQOption): string | null => {
+    if (!activeQuestion) return null;
+    switch (opt) {
+      case 'A':
+        return activeQuestion.optionA;
+      case 'B':
+        return activeQuestion.optionB;
+      case 'C':
+        return activeQuestion.optionC;
+      case 'D':
+        return activeQuestion.optionD;
+    }
+  };
 
   // Tablet keyboard support (physical keyboard or Bluetooth remote)
   useEffect(() => {
@@ -63,47 +83,91 @@ export const AnswerPad: React.FC<AnswerPadProps> = ({
   }, [onSelectOption, onSkip, onPrevious, onNext]);
 
   return (
-    <div className="flex-1 flex flex-col w-full max-w-4xl mx-auto px-4 py-2 select-none justify-between min-h-0">
-      {/* Primary A, B, C, D Answer Buttons - Occupy majority of vertical space */}
-      <div className="flex-1 flex flex-col gap-2.5 sm:gap-3 justify-stretch py-1">
+    <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex flex-col flex-1 select-none">
+      {/* If Questions are imported, display active Question Text card */}
+      {activeQuestion ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-2 sm:mb-3 shadow-md shrink-0">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className="text-[10px] sm:text-xs font-bold tracking-wider text-blue-400 bg-blue-950/70 border border-blue-800/50 px-2 py-0.5 rounded-full uppercase">
+              Question {currentQuestionNumber}
+            </span>
+            <span className="text-[10px] sm:text-[11px] text-slate-400">
+              TXT Question Paper
+            </span>
+          </div>
+          <p className="text-sm sm:text-base md:text-lg font-medium text-white whitespace-pre-line leading-relaxed select-text">
+            {activeQuestion.questionText}
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/60 border border-slate-800/80 rounded-xl mb-2 text-xs text-slate-400 shrink-0">
+          <span className="text-[11px] sm:text-xs">Numbered Answer Pad Mode</span>
+          {onOpenImport && (
+            <button
+              onClick={onOpenImport}
+              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition text-[11px] sm:text-xs"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Import MCQ (.txt)</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Primary A, B, C, D Answer Buttons */}
+      <div className="flex flex-col gap-2 sm:gap-2.5 w-full flex-1 justify-center">
         {options.map((option) => {
           const isSelected = currentAnswer === option;
+          const optionText = getOptionText(option);
 
           return (
             <button
               key={option}
               id={`option-btn-${option}`}
               onClick={() => onSelectOption(option)}
-              className={`flex-1 min-h-[58px] sm:min-h-[68px] md:min-h-[76px] rounded-2xl flex items-center justify-between px-6 sm:px-8 border-2 transition-all active:scale-[0.98] ${
+              className={`w-full min-h-[50px] sm:min-h-[62px] md:min-h-[72px] rounded-xl sm:rounded-2xl flex items-center justify-between px-3.5 sm:px-6 border-2 transition-all active:scale-[0.98] ${
                 isSelected
                   ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-900/30'
                   : 'bg-slate-900 hover:bg-slate-850 hover:border-slate-600 border-slate-750 text-slate-100 active:bg-slate-800'
               }`}
-              aria-label={`Option ${option}`}
+              aria-label={`Option ${option}${optionText ? `: ${optionText}` : ''}`}
               style={{ touchAction: 'manipulation' }}
             >
-              {/* Option Letter (Very large & bold for low-vision & tablet viewing) */}
-              <span className="text-3xl sm:text-4xl md:text-5xl font-black tracking-wider flex items-center gap-3">
-                {option}
-                {isSelected && (
-                  <span className="text-xs sm:text-sm font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-700/80 text-blue-100 border border-blue-400/40">
+              {/* Option Letter Badge */}
+              <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                <span className={`w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl flex items-center justify-center font-black text-lg sm:text-xl md:text-2xl ${
+                  isSelected
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'bg-slate-800 border border-slate-700 text-slate-200'
+                }`}>
+                  {option}
+                </span>
+                {isSelected && !optionText && (
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-700/80 text-blue-100 border border-blue-400/40">
                     Selected
                   </span>
                 )}
-              </span>
+              </div>
+
+              {/* Option Text if questions imported */}
+              {optionText ? (
+                <span className="flex-1 px-2.5 sm:px-4 text-left text-xs sm:text-sm md:text-base font-medium text-slate-100 line-clamp-3 leading-snug select-text">
+                  {optionText}
+                </span>
+              ) : null}
 
               {/* Visual indicator on right side of button */}
               <div
-                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center border-2 transition-all ${
+                className={`w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg sm:rounded-xl flex items-center justify-center border-2 transition-all shrink-0 ${
                   isSelected
                     ? 'bg-white border-white text-blue-600'
                     : 'border-slate-700 bg-slate-950/60 text-slate-500'
                 }`}
               >
                 {isSelected ? (
-                  <Check className="w-6 h-6 sm:w-7 sm:h-7 stroke-[3]" />
+                  <Check className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 stroke-[3]" />
                 ) : (
-                  <span className="text-sm font-bold text-slate-400">{option}</span>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400">{option}</span>
                 )}
               </div>
             </button>
@@ -111,16 +175,16 @@ export const AnswerPad: React.FC<AnswerPadProps> = ({
         })}
       </div>
 
-      {/* Large SKIP Button (One tap, leaves blank, advances to next question) */}
-      <div className="pt-2 pb-1">
+      {/* Large SKIP Button (Clearly separated, directly under Option D, never overlaps) */}
+      <div className="mt-2.5 sm:mt-3 mb-1 shrink-0">
         <button
           id="skip-btn"
           onClick={onSkip}
-          className="w-full h-14 sm:h-16 rounded-2xl bg-amber-950/30 hover:bg-amber-950/50 border-2 border-amber-500/70 hover:border-amber-400 text-amber-300 active:bg-amber-900/40 active:scale-[0.98] transition-all flex items-center justify-center gap-3 font-black text-xl sm:text-2xl tracking-widest shadow-md"
+          className="w-full h-11 sm:h-13 md:h-14 rounded-xl sm:rounded-2xl bg-amber-950/40 hover:bg-amber-950/60 border-2 border-amber-500/80 hover:border-amber-400 text-amber-300 active:bg-amber-900/50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 sm:gap-3 font-black text-sm sm:text-lg md:text-xl tracking-widest shadow-md"
           aria-label="Skip question"
           style={{ touchAction: 'manipulation' }}
         >
-          <FastForward className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400 stroke-[2.5]" />
+          <FastForward className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-amber-400 stroke-[2.5]" />
           <span>SKIP QUESTION</span>
         </button>
       </div>

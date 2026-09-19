@@ -4,6 +4,15 @@
 
 export type MCQOption = 'A' | 'B' | 'C' | 'D';
 
+export interface MCQQuestionItem {
+  index: number;
+  questionText: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+}
+
 export interface MCQState {
   startQuestion: number;
   totalQuestions: number;
@@ -13,6 +22,7 @@ export interface MCQState {
   optionsCount: 4 | 5; // Support 4 or 5 options
   soundEnabled: boolean;
   hapticEnabled: boolean;
+  importedQuestions?: MCQQuestionItem[];
 }
 
-export type ActiveModal = 'none' | 'setup' | 'unanswered' | 'export' | 'clearConfirm' | 'androidInstall';
+export type ActiveModal = 'none' | 'setup' | 'unanswered' | 'export' | 'clearConfirm' | 'androidInstall' | 'importTxt' | 'formatHelp';

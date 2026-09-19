@@ -9,6 +9,8 @@ import { ExportModal } from './components/ExportModal';
 import { SetupModal } from './components/SetupModal';
 import { ClearConfirmModal } from './components/ClearConfirmModal';
 import { AndroidInstallModal } from './components/AndroidInstallModal';
+import { ImportTxtModal } from './components/ImportTxtModal';
+import { FormatHelpModal } from './components/FormatHelpModal';
 import { ActiveModal } from './types';
 
 export default function App() {
@@ -19,6 +21,8 @@ export default function App() {
     currentQuestion,
     optionsCount,
     answers,
+    importedQuestions,
+    activeQuestionItem,
     stats,
     answerCurrent,
     skipCurrent,
@@ -27,6 +31,8 @@ export default function App() {
     jumpToQuestion,
     clearCurrentAnswer,
     clearAllAnswers,
+    importQuestions,
+    clearImportedQuestions,
     updateRange,
   } = useMCQState();
 
@@ -34,7 +40,7 @@ export default function App() {
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="h-[100dvh] max-h-[100dvh] w-full flex flex-col bg-slate-950 text-slate-100 font-sans select-none overflow-hidden">
       {/* Header with Title, Status & Counters */}
       <Header
         currentQuestion={currentQuestion}
@@ -44,20 +50,24 @@ export default function App() {
         answeredCount={stats.answeredCount}
         unansweredCount={stats.unansweredCount}
         currentAnswer={stats.currentAnswer}
+        importedCount={importedQuestions.length}
         onOpenModal={setActiveModal}
         isPWAInstallable={isInstallable}
         onInstallPWA={install}
       />
 
-      {/* Primary MCQ Buttons & Skip (Dominates vertical height) */}
-      <main className="flex-1 flex flex-col justify-center min-h-0 overflow-hidden">
+      {/* Primary MCQ Buttons & Skip (Dominates vertical height, smooth scroll on mobile if needed) */}
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col justify-start">
         <AnswerPad
           optionsCount={optionsCount}
           currentAnswer={stats.currentAnswer}
+          activeQuestion={activeQuestionItem}
+          currentQuestionNumber={currentQuestion}
           onSelectOption={answerCurrent}
           onSkip={skipCurrent}
           onPrevious={goToPrevious}
           onNext={goToNext}
+          onOpenImport={() => setActiveModal('importTxt')}
         />
       </main>
 
@@ -74,6 +84,20 @@ export default function App() {
       />
 
       {/* Modals & Dialogs */}
+      {activeModal === 'importTxt' && (
+        <ImportTxtModal
+          currentlyImportedCount={importedQuestions.length}
+          onImport={importQuestions}
+          onClearImported={clearImportedQuestions}
+          onOpenHelp={() => setActiveModal('formatHelp')}
+          onClose={() => setActiveModal('none')}
+        />
+      )}
+
+      {activeModal === 'formatHelp' && (
+        <FormatHelpModal onClose={() => setActiveModal('none')} />
+      )}
+
       {activeModal === 'unanswered' && (
         <UnansweredModal
           unansweredList={stats.unansweredList}
@@ -87,6 +111,7 @@ export default function App() {
           startQuestion={startQuestion}
           endQuestion={endQuestion}
           answers={answers}
+          importedQuestions={importedQuestions}
           onClose={() => setActiveModal('none')}
         />
       )}

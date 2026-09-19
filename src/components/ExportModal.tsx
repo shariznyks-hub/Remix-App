@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { X, Copy, Download, Check, Share2, FileText, Table } from 'lucide-react';
-import { MCQOption } from '../types';
+import { MCQOption, MCQQuestionItem } from '../types';
 import { generateTxtExport, generateCsvExport, downloadFile, copyToClipboard } from '../utils/exportUtils';
 
 interface ExportModalProps {
   startQuestion: number;
   endQuestion: number;
   answers: Record<number, MCQOption>;
+  importedQuestions?: MCQQuestionItem[];
   onClose: () => void;
 }
 
@@ -14,6 +15,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   startQuestion,
   endQuestion,
   answers,
+  importedQuestions,
   onClose,
 }) => {
   const [format, setFormat] = useState<'TXT' | 'CSV'>('TXT');
@@ -21,11 +23,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   const exportText = useMemo(() => {
     if (format === 'TXT') {
-      return generateTxtExport(startQuestion, endQuestion, answers);
+      return generateTxtExport(startQuestion, endQuestion, answers, importedQuestions);
     } else {
-      return generateCsvExport(startQuestion, endQuestion, answers);
+      return generateCsvExport(startQuestion, endQuestion, answers, importedQuestions);
     }
-  }, [format, startQuestion, endQuestion, answers]);
+  }, [format, startQuestion, endQuestion, answers, importedQuestions]);
 
   const handleCopy = async () => {
     const success = await copyToClipboard(exportText);
