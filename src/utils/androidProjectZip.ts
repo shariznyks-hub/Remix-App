@@ -1,5 +1,4 @@
 import JSZip from 'jszip';
-import { downloadFile } from './exportUtils';
 
 export async function downloadAndroidProjectZip(): Promise<void> {
   const zip = new JSZip();
@@ -75,12 +74,15 @@ android {
 
     defaultConfig {
         applicationId = "com.mcq.answerpad"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
@@ -115,11 +117,22 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    testImplementation("junit:junit:4.13.2")
 }
 `
   );
 
-  // AndroidManifest.xml
+  app?.file(
+    'proguard-rules.pro',
+    `# Proguard rules for MCQ Answer Pad
+-keepattributes *Annotation*
+-keepclassmembers class * {
+    @androidx.room.* <fields>;
+}
+`
+  );
+
+  // Src main
   const main = app?.folder('src')?.folder('main');
   main?.file(
     'AndroidManifest.xml',
@@ -128,13 +141,16 @@ dependencies {
 
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="MCQ Answer Pad"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@android:style/Theme.Material.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -176,203 +192,157 @@ class MainActivity : ComponentActivity() {
   );
 
   javaPkg?.file(
-    'MCQViewModel.kt',
+    'MCQItem.kt',
     `package com.mcq.answerpad
 
-import android.app.Application
-import android.content.Context
-import androidx.lifecycle.AndroidViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import org.json.JSONObject
+/**
+ * Data model for an MCQ question item.
+ * NOTE: Strictly NO correct answer field exists.
+ */
+data class MCQItem(
+    val index: Int,
+    val questionText: String,
+    val optionA: String,
+    val optionB: String,
+    val optionC: String,
+    val optionD: String
+)
+`
+  );
 
-data class MCQUiState(
-    val startQuestion: Int = 1,
-    val totalQuestions: Int = 500,
-    val currentQuestion: Int = 1,
-    val answers: Map<Int, String> = emptyMap(),
-    val optionsCount: Int = 4,
-    val showUnansweredDialog: Boolean = false,
-    val showExportDialog: Boolean = false,
-    val showClearAllDialog: Boolean = false,
-    val showSetupDialog: Boolean = false
-) {
-    val endQuestion: Int get() = startQuestion + totalQuestions - 1
-    val answeredCount: Int get() = answers.count { it.key in startQuestion..endQuestion && it.value.isNotBlank() }
-    val unansweredCount: Int get() = totalQuestions - answeredCount
-    val currentAnswer: String? get() = answers[currentQuestion]
-    
-    val unansweredList: List<Int> get() {
-        val list = mutableListOf<Int>()
-        for (q in startQuestion..endQuestion) {
-            if (answers[q].isNullOrBlank()) {
-                list.add(q)
-            }
-        }
-        return list
-    }
+  javaPkg?.file(
+    'MCQTxtParser.kt',
+    `package com.mcq.answerpad
+
+sealed class ParseResult {
+    data class Success(val questions: List<MCQItem>) : ParseResult()
+    data class Error(val message: String) : ParseResult()
 }
 
-class MCQViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences("mcq_answer_pad_prefs", Context.MODE_PRIVATE)
+object MCQTxtParser {
 
-    private val _uiState = MutableStateFlow(loadInitialState())
-    val uiState: StateFlow<MCQUiState> = _uiState.asStateFlow()
+    private val startTagPattern = Regex("""^\\[Q(\\d+)\\]\\s*$""", RegexOption.IGNORE_CASE)
+    private val endTagPattern = Regex("""^\\[/Q(\\d+)\\]\\s*$""", RegexOption.IGNORE_CASE)
 
-    private fun loadInitialState(): MCQUiState {
-        val start = prefs.getInt("start_question", 1)
-        val total = prefs.getInt("total_questions", 500)
-        val current = prefs.getInt("current_question", start)
-        val optionsCount = prefs.getInt("options_count", 4)
+    fun parse(content: String): ParseResult {
+        if (content.isBlank()) {
+            return ParseResult.Error("The imported file is empty.")
+        }
 
-        val answersMap = mutableMapOf<Int, String>()
-        val answersJson = prefs.getString("answers_json", null)
-        if (!answersJson.isNullOrBlank()) {
-            try {
-                val json = JSONObject(answersJson)
-                val keys = json.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    val qNum = key.toIntOrNull()
-                    if (qNum != null) {
-                        answersMap[qNum] = json.getString(key)
+        val normalized = content.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+        val lines = normalized.split("\\n")
+
+        val questions = mutableListOf<MCQItem>()
+        var currentBlockTag: String? = null
+        var blockStartLine = 0
+
+        var questionText: String? = null
+        var optionA: String? = null
+        var optionB: String? = null
+        var optionC: String? = null
+        var optionD: String? = null
+        var currentSection: String? = null
+
+        for ((index, rawLine) in lines.withIndex()) {
+            val lineNumber = index + 1
+            val trimmedLine = rawLine.trim()
+
+            if (currentBlockTag == null) {
+                if (trimmedLine.isEmpty()) continue
+
+                val startMatch = startTagPattern.find(trimmedLine)
+                if (startMatch != null) {
+                    val qNum = startMatch.groupValues[1]
+                    currentBlockTag = "[Q$qNum]"
+                    blockStartLine = lineNumber
+                    questionText = null
+                    optionA = null
+                    optionB = null
+                    optionC = null
+                    optionD = null
+                    currentSection = null
+                } else if (trimmedLine.startsWith("[") && trimmedLine.contains("Q", ignoreCase = true)) {
+                    return ParseResult.Error("Line $lineNumber: Malformed question tag '$trimmedLine'. Expected format: [Q1]")
+                } else {
+                    return ParseResult.Error("Line $lineNumber: Unexpected text outside question block: '$trimmedLine'. Questions must start with [Q1], [Q2], etc.")
+                }
+            } else {
+                val endMatch = endTagPattern.find(trimmedLine)
+                if (endMatch != null) {
+                    if (questionText.isNullOrBlank()) {
+                        return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Missing 'Question:' text.")
+                    }
+                    if (optionA.isNullOrBlank()) {
+                        return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Missing 'A:' option.")
+                    }
+                    if (optionB.isNullOrBlank()) {
+                        return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Missing 'B:' option.")
+                    }
+                    if (optionC.isNullOrBlank()) {
+                        return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Missing 'C:' option.")
+                    }
+                    if (optionD.isNullOrBlank()) {
+                        return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Missing 'D:' option.")
+                    }
+
+                    questions.add(
+                        MCQItem(
+                            index = questions.size + 1,
+                            questionText = questionText.trim(),
+                            optionA = optionA.trim(),
+                            optionB = optionB.trim(),
+                            optionC = optionC.trim(),
+                            optionD = optionD.trim()
+                        )
+                    )
+
+                    currentBlockTag = null
+                    currentSection = null
+                } else if (startTagPattern.find(trimmedLine) != null) {
+                    return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine): Block was not closed before new question block started at line $lineNumber.")
+                } else if (trimmedLine.startsWith("Question:", ignoreCase = true)) {
+                    questionText = trimmedLine.substringAfter(":").trim()
+                    currentSection = "Question"
+                } else if (trimmedLine.startsWith("A:", ignoreCase = true)) {
+                    optionA = trimmedLine.substringAfter(":").trim()
+                    currentSection = "A"
+                } else if (trimmedLine.startsWith("B:", ignoreCase = true)) {
+                    optionB = trimmedLine.substringAfter(":").trim()
+                    currentSection = "B"
+                } else if (trimmedLine.startsWith("C:", ignoreCase = true)) {
+                    optionC = trimmedLine.substringAfter(":").trim()
+                    currentSection = "C"
+                } else if (trimmedLine.startsWith("D:", ignoreCase = true)) {
+                    optionD = trimmedLine.substringAfter(":").trim()
+                    currentSection = "D"
+                } else if (trimmedLine.startsWith("E:", ignoreCase = true)) {
+                    return ParseResult.Error("Question block $currentBlockTag (line $lineNumber): Option E is not allowed. Only options A, B, C, and D are supported.")
+                } else if (trimmedLine.startsWith("Answer:", ignoreCase = true) || trimmedLine.startsWith("Correct Answer:", ignoreCase = true)) {
+                    return ParseResult.Error("Question block $currentBlockTag (line $lineNumber): 'Answer:' line is not allowed. The app only records user-selected answers.")
+                } else if (trimmedLine.isNotEmpty()) {
+                    when (currentSection) {
+                        "Question" -> questionText = (questionText ?: "") + "\\n" + trimmedLine
+                        "A" -> optionA = (optionA ?: "") + " " + trimmedLine
+                        "B" -> optionB = (optionB ?: "") + " " + trimmedLine
+                        "C" -> optionC = (optionC ?: "") + " " + trimmedLine
+                        "D" -> optionD = (optionD ?: "") + " " + trimmedLine
+                        else -> {
+                            return ParseResult.Error("Question block $currentBlockTag (line $lineNumber): Unrecognized line '$trimmedLine'. Expected Question:, A:, B:, C:, or D:")
+                        }
                     }
                 }
-            } catch (e: Exception) {
-                // ignore
             }
         }
 
-        return MCQUiState(
-            startQuestion = start,
-            totalQuestions = total,
-            currentQuestion = current.coerceIn(start, start + total - 1),
-            answers = answersMap,
-            optionsCount = optionsCount
-        )
-    }
-
-    private fun persistState() {
-        val state = _uiState.value
-        val json = JSONObject()
-        state.answers.forEach { (q, ans) ->
-            json.put(q.toString(), ans)
+        if (currentBlockTag != null) {
+            return ParseResult.Error("Question block $currentBlockTag (started at line $blockStartLine) is missing its closing tag.")
         }
-        prefs.edit()
-            .putInt("start_question", state.startQuestion)
-            .putInt("total_questions", state.totalQuestions)
-            .putInt("current_question", state.currentQuestion)
-            .putInt("options_count", state.optionsCount)
-            .putString("answers_json", json.toString())
-            .apply()
-    }
 
-    fun answerCurrent(option: String) {
-        _uiState.update { state ->
-            val updated = state.answers.toMutableMap()
-            updated[state.currentQuestion] = option
-            val nextQ = if (state.currentQuestion < state.endQuestion) state.currentQuestion + 1 else state.currentQuestion
-            state.copy(answers = updated, currentQuestion = nextQ)
+        if (questions.isEmpty()) {
+            return ParseResult.Error("No valid question blocks found in file.\\nExpected format:\\n[Q1]\\nQuestion: ...\\nA: ...\\nB: ...\\nC: ...\\nD: ...\\n[/Q1]")
         }
-        persistState()
-    }
 
-    fun skipCurrent() {
-        _uiState.update { state ->
-            val nextQ = if (state.currentQuestion < state.endQuestion) state.currentQuestion + 1 else state.currentQuestion
-            state.copy(currentQuestion = nextQ)
-        }
-        persistState()
-    }
-
-    fun nextQuestion() {
-        _uiState.update { state ->
-            if (state.currentQuestion < state.endQuestion) {
-                state.copy(currentQuestion = state.currentQuestion + 1)
-            } else state
-        }
-        persistState()
-    }
-
-    fun previousQuestion() {
-        _uiState.update { state ->
-            if (state.currentQuestion > state.startQuestion) {
-                state.copy(currentQuestion = state.currentQuestion - 1)
-            } else state
-        }
-        persistState()
-    }
-
-    fun jumpTo(questionNumber: Int) {
-        _uiState.update { state ->
-            val clamped = questionNumber.coerceIn(state.startQuestion, state.endQuestion)
-            state.copy(currentQuestion = clamped, showUnansweredDialog = false)
-        }
-        persistState()
-    }
-
-    fun clearCurrentAnswer() {
-        _uiState.update { state ->
-            val updated = state.answers.toMutableMap()
-            updated.remove(state.currentQuestion)
-            state.copy(answers = updated)
-        }
-        persistState()
-    }
-
-    fun clearAllAnswers() {
-        _uiState.update { state ->
-            state.copy(
-                answers = emptyMap(),
-                currentQuestion = state.startQuestion,
-                showClearAllDialog = false
-            )
-        }
-        persistState()
-    }
-
-    fun updateRange(start: Int, total: Int, options: Int) {
-        val validStart = start.coerceAtLeast(1)
-        val validTotal = total.coerceIn(1, 500)
-        _uiState.update { state ->
-            state.copy(
-                startQuestion = validStart,
-                totalQuestions = validTotal,
-                currentQuestion = validStart,
-                optionsCount = options,
-                showSetupDialog = false
-            )
-        }
-        persistState()
-    }
-
-    fun setUnansweredDialog(show: Boolean) = _uiState.update { it.copy(showUnansweredDialog = show) }
-    fun setExportDialog(show: Boolean) = _uiState.update { it.copy(showExportDialog = show) }
-    fun setClearAllDialog(show: Boolean) = _uiState.update { it.copy(showClearAllDialog = show) }
-    fun setSetupDialog(show: Boolean) = _uiState.update { it.copy(showSetupDialog = show) }
-
-    fun generateTxtExport(): String {
-        val state = _uiState.value
-        val sb = StringBuilder()
-        for (q in state.startQuestion..state.endQuestion) {
-            val ans = state.answers[q] ?: ""
-            val valid = if (ans in listOf("A", "B", "C", "D")) ans else ""
-            sb.append("$q-$valid\\n")
-        }
-        return sb.toString().trimEnd()
-    }
-
-    fun generateCsvExport(): String {
-        val state = _uiState.value
-        val sb = StringBuilder("Question,Answer\\n")
-        for (q in state.startQuestion..state.endQuestion) {
-            val ans = state.answers[q] ?: ""
-            val valid = if (ans in listOf("A", "B", "C", "D")) ans else ""
-            sb.append("$q,$valid\\n")
-        }
-        return sb.toString().trimEnd()
+        return ParseResult.Success(questions)
     }
 }
 `
@@ -403,28 +373,23 @@ jobs:
 `
   );
 
-  // README with clear instructions
   zip.file(
     'README.md',
     `# MCQ Answer Pad - Native Android App (Jetpack Compose)
 
 This is the complete native Android Jetpack Compose project for **MCQ Answer Pad**.
 
-## How to Install APK on your Android Tablet (Without Android Studio):
+## TXT Import Format
+[Q1]
+Question: What is the capital of France?
+A: Berlin
+B: Madrid
+C: Paris
+D: Rome
+[/Q1]
 
-### Option A: The Easiest Way (PWA - Instant 1-tap, no build needed)
-1. Open the hosted web application URL on your Android Tablet in Google Chrome.
-2. Tap the 3 dots menu in Chrome (or the "Install App" button inside the app).
-3. Select **"Install App"** or **"Add to Home screen"**.
-4. The app installs directly onto your tablet home screen. It runs 100% offline, full-screen, with no browser address bar, with large touch-friendly buttons designed for lying down!
-
-### Option B: Build APK with Free GitHub Actions (No Android Studio required)
-1. Create a new free repository on [GitHub](https://github.com).
-2. Upload this folder's contents into the repository.
-3. Click the **"Actions"** tab on your GitHub repository.
-4. The "Build Android APK" workflow runs automatically in ~2 minutes.
-5. Click on the completed run and download **MCQ-Answer-Pad.apk**.
-6. Transfer or email the .apk to your tablet, tap it, and tap **"Install"**!
+Supports UTF-8 Unicode including Hindi, Urdu, and English.
+No Answer line is allowed or required.
 `
   );
 
