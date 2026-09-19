@@ -10,90 +10,34 @@ import { MCQOption, MCQQuestionItem } from '../types';
 export function generateTxtExport(
   startQuestion: number,
   endQuestion: number,
-  answers: Record<number, MCQOption>,
-  importedQuestions?: MCQQuestionItem[]
+  answers: Record<number, MCQOption>
 ): string {
   const lines: string[] = [];
   for (let q = startQuestion; q <= endQuestion; q++) {
     const raw = answers[q];
-    const ans = raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? raw : '';
-    
-    // If questions are imported, append the selected option text for clarity
-    if (importedQuestions && importedQuestions[q - 1]) {
-      const item = importedQuestions[q - 1];
-      let selectedText = '';
-      if (ans === 'A') selectedText = ` (${item.optionA})`;
-      else if (ans === 'B') selectedText = ` (${item.optionB})`;
-      else if (ans === 'C') selectedText = ` (${item.optionC})`;
-      else if (ans === 'D') selectedText = ` (${item.optionD})`;
-      lines.push(`${q}-${ans}${selectedText}`);
-    } else {
-      lines.push(`${q}-${ans}`);
-    }
+    const valid = raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? raw.toLowerCase() : '-';
+    lines.push(`${q} ${valid}`);
   }
   return lines.join('\n');
 }
 
-function escapeCsvCell(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
 /**
  * Generate CSV format export
- * If questions are imported:
- * Question No,Question,A,B,C,D,Selected Answer,Selected Text
- * Standard format:
- * Question,Answer
+ * Format:
+ * 1,a
+ * 2,d
+ * 3,b
  */
 export function generateCsvExport(
   startQuestion: number,
   endQuestion: number,
-  answers: Record<number, MCQOption>,
-  importedQuestions?: MCQQuestionItem[]
+  answers: Record<number, MCQOption>
 ): string {
-  if (importedQuestions && importedQuestions.length > 0) {
-    const lines: string[] = ['Question No,Question,A,B,C,D,Selected Answer,Selected Text'];
-    for (let q = startQuestion; q <= endQuestion; q++) {
-      const raw = answers[q];
-      const ans = raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? raw : '';
-      const item = importedQuestions[q - 1];
-      
-      const qText = item ? item.questionText.replace(/\r?\n/g, ' ') : '';
-      const optA = item ? item.optionA : '';
-      const optB = item ? item.optionB : '';
-      const optC = item ? item.optionC : '';
-      const optD = item ? item.optionD : '';
-      
-      let selText = '';
-      if (ans === 'A') selText = optA;
-      else if (ans === 'B') selText = optB;
-      else if (ans === 'C') selText = optC;
-      else if (ans === 'D') selText = optD;
-
-      lines.push(
-        [
-          q,
-          escapeCsvCell(qText),
-          escapeCsvCell(optA),
-          escapeCsvCell(optB),
-          escapeCsvCell(optC),
-          escapeCsvCell(optD),
-          ans,
-          escapeCsvCell(selText),
-        ].join(',')
-      );
-    }
-    return lines.join('\n');
-  }
-
-  const lines: string[] = ['Question,Answer'];
+  const lines: string[] = [];
   for (let q = startQuestion; q <= endQuestion; q++) {
     const raw = answers[q];
-    const ans = raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? raw : '';
-    lines.push(`${q},${ans}`);
+    const valid = raw === 'A' || raw === 'B' || raw === 'C' || raw === 'D' ? raw.toLowerCase() : '-';
+    lines.push(`${q},${valid}`);
   }
   return lines.join('\n');
 }

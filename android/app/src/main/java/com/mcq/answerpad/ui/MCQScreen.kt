@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mcq.answerpad.MCQViewModel
@@ -60,6 +63,7 @@ fun MCQScreen(viewModel: MCQViewModel) {
     }
 
     val options = listOf("A", "B", "C", "D")
+    var showMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -69,12 +73,14 @@ fun MCQScreen(viewModel: MCQViewModel) {
                         Text(
                             text = "MCQ Answer Pad",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (state.importedQuestions.isNotEmpty()) {
                             Text(
-                                text = "Imported MCQ Mode (${state.importedQuestions.size} Qs)",
-                                fontSize = 12.sp,
+                                text = "Imported MCQ (${state.importedQuestions.size} Qs)",
+                                fontSize = 11.sp,
                                 color = EmeraldAccent,
                                 fontWeight = FontWeight.Medium
                             )
@@ -88,23 +94,45 @@ fun MCQScreen(viewModel: MCQViewModel) {
                     ) {
                         Icon(Icons.Default.FileOpen, contentDescription = "Import MCQ TXT")
                     }
-                    // TXT Format Help button
-                    IconButton(
-                        onClick = { viewModel.setHelpDialog(true) }
-                    ) {
-                        Icon(Icons.Default.HelpOutline, contentDescription = "TXT Format Help")
-                    }
                     // Export button
                     IconButton(onClick = { viewModel.setExportDialog(true) }) {
                         Icon(Icons.Default.Share, contentDescription = "Export")
                     }
-                    // Range settings button
-                    IconButton(onClick = { viewModel.setSetupDialog(true) }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Range Settings")
-                    }
-                    // Clear All button
-                    IconButton(onClick = { viewModel.setClearAllDialog(true) }) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear All")
+                    // Overflow menu for Range, Help, Clear All
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            modifier = Modifier.background(Slate900)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Range Settings", color = Slate100) },
+                                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null, tint = BlueAccent) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setSetupDialog(true)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("TXT Format Help", color = Slate100) },
+                                leadingIcon = { Icon(Icons.Default.HelpOutline, contentDescription = null, tint = EmeraldAccent) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setHelpDialog(true)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Clear All Answers", color = RoseClear) },
+                                leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = RoseClear) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.setClearAllDialog(true)
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -114,20 +142,178 @@ fun MCQScreen(viewModel: MCQViewModel) {
                 )
             )
         },
+        bottomBar = {
+            Surface(
+                color = Slate900,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Slate800),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .navigationBarsPadding()
+                ) {
+                    // Quick Question Jump Strip (Horizontal Scroll)
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        items(state.endQuestion - state.startQuestion + 1) { index ->
+                            val qNum = state.startQuestion + index
+                            val isCurrent = state.currentQuestion == qNum
+                            val isAnswered = !state.answers[qNum].isNullOrBlank()
+                            val chipColor = when {
+                                isCurrent -> BlueAccent
+                                isAnswered -> EmeraldAccent.copy(alpha = 0.25f)
+                                else -> Slate800
+                            }
+                            val textColor = when {
+                                isCurrent -> Color.White
+                                isAnswered -> EmeraldAccent
+                                else -> Slate400
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = chipColor,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isCurrent) Color.White else if (isAnswered) EmeraldAccent else Slate700
+                                ),
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .clickable { viewModel.jumpTo(qNum) }
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(horizontal = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$qNum",
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Black else FontWeight.Bold,
+                                        color = textColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom Navigation Buttons: Prev, Clear, Skip, Next
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // PREV Button
+                        Button(
+                            onClick = { viewModel.previousQuestion() },
+                            enabled = state.currentQuestion > state.startQuestion,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Slate800,
+                                contentColor = Slate100,
+                                disabledContainerColor = Slate800.copy(alpha = 0.4f),
+                                disabledContentColor = Slate700
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Prev", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Prev", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // CLEAR ANSWER Button
+                        Button(
+                            onClick = { viewModel.clearCurrentAnswer() },
+                            enabled = !state.currentAnswer.isNullOrBlank(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = RoseClear.copy(alpha = 0.15f),
+                                contentColor = RoseClear,
+                                disabledContainerColor = Slate800.copy(alpha = 0.4f),
+                                disabledContentColor = Slate700
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (!state.currentAnswer.isNullOrBlank()) RoseClear.copy(alpha = 0.5f) else Slate700
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Clear", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // SKIP Button (Amber, Tactile)
+                        Button(
+                            onClick = { viewModel.skipCurrent() },
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AmberSkip.copy(alpha = 0.2f),
+                                contentColor = AmberSkip
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, AmberSkip),
+                            contentPadding = PaddingValues(horizontal = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Redo, contentDescription = "Skip", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("SKIP", fontSize = 14.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                        }
+
+                        // NEXT Button (Blue Accent)
+                        Button(
+                            onClick = { viewModel.nextQuestion() },
+                            enabled = state.currentQuestion < state.endQuestion,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BlueAccent,
+                                contentColor = Color.White,
+                                disabledContainerColor = Slate800.copy(alpha = 0.4f),
+                                disabledContentColor = Slate700
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp)
+                        ) {
+                            Text("Next", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next", modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+        },
         containerColor = Slate950
     ) { paddingValues ->
+        // MAIN SCROLLABLE CONTENT (QUESTION + MULTI-LINE SENTENCE CHOICES)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // PROGRESS & STATS CARD (INCLUDING QUESTION TEXT IF IMPORTED)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Slate900),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Slate800)
             ) {
                 Column(
                     modifier = Modifier.padding(14.dp),
@@ -140,7 +326,7 @@ fun MCQScreen(viewModel: MCQViewModel) {
                     ) {
                         Text(
                             text = "Question ${state.currentQuestion} / ${state.endQuestion}",
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = BlueAccent
                         )
@@ -153,10 +339,10 @@ fun MCQScreen(viewModel: MCQViewModel) {
                                 border = androidx.compose.foundation.BorderStroke(1.5.dp, EmeraldAccent)
                             ) {
                                 Text(
-                                    text = "Saved: ${state.currentAnswer}",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                    text = "Saved: ${state.currentAnswer?.lowercase()}",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     color = EmeraldAccent
                                 )
                             }
@@ -167,7 +353,7 @@ fun MCQScreen(viewModel: MCQViewModel) {
                             ) {
                                 Text(
                                     text = "Unanswered",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 13.sp,
                                     color = Slate400
@@ -184,19 +370,15 @@ fun MCQScreen(viewModel: MCQViewModel) {
                             color = Slate950,
                             shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Slate800),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 140.dp)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 text = currentMCQ.questionText,
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .verticalScroll(rememberScrollState()),
-                                fontSize = 17.sp,
+                                modifier = Modifier.padding(14.dp),
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Slate100,
-                                lineHeight = 23.sp
+                                lineHeight = 24.sp
                             )
                         }
                     }
@@ -212,19 +394,19 @@ fun MCQScreen(viewModel: MCQViewModel) {
                             text = "Answered: ${state.answeredCount}",
                             color = EmeraldAccent,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                         Button(
                             onClick = { viewModel.setUnansweredDialog(true) },
                             colors = ButtonDefaults.buttonColors(containerColor = Slate800),
                             shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = "Unanswered: ${state.unansweredCount}",
                                 color = AmberSkip,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -244,14 +426,12 @@ fun MCQScreen(viewModel: MCQViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // MAIN MCQ BUTTONS: Exactly FOUR options A, B, C, D (Never E)
+            // MAIN MCQ BUTTONS: Exactly FOUR options A, B, C, D (EXPANDABLE FOR FULL SENTENCES)
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val currentMCQ = state.currentMCQ
                 options.forEach { opt ->
@@ -268,22 +448,22 @@ fun MCQScreen(viewModel: MCQViewModel) {
                         onClick = { viewModel.answerCurrent(opt) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .defaultMinSize(minHeight = 58.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isSelected) BlueSelected else Slate900,
                             contentColor = if (isSelected) Color.White else Slate100
                         ),
                         border = androidx.compose.foundation.BorderStroke(
-                            width = if (isSelected) 3.dp else 1.5.dp,
-                            color = if (isSelected) BlueAccent else Slate700
+                            width = if (isSelected) 2.5.dp else 1.5.dp,
+                            color = if (isSelected) BlueAccent else Slate800
                         ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (optText != null) Arrangement.Start else Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.Top
                         ) {
                             // Large tactile badge for Option Letter
                             Surface(
@@ -292,40 +472,47 @@ fun MCQScreen(viewModel: MCQViewModel) {
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp,
                                     if (isSelected) Color.White.copy(alpha = 0.5f) else Slate700
-                                )
+                                ),
+                                modifier = Modifier.size(if (optText != null) 36.dp else 48.dp)
                             ) {
-                                Text(
-                                    text = opt,
-                                    fontSize = if (optText != null) 22.sp else 38.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(
-                                        horizontal = if (optText != null) 14.dp else 24.dp,
-                                        vertical = if (optText != null) 6.dp else 8.dp
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = opt,
+                                        fontSize = if (optText != null) 18.sp else 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.White
                                     )
-                                )
+                                }
                             }
 
                             if (optText != null) {
-                                Spacer(modifier = Modifier.width(14.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                // Option full sentence text (auto-wraps to as many lines as needed, never cut off!)
                                 Text(
                                     text = optText,
-                                    fontSize = 17.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isSelected) Color.White else Slate100,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(top = 4.dp),
                                     textAlign = TextAlign.Start,
-                                    lineHeight = 22.sp
+                                    lineHeight = 22.sp,
+                                    softWrap = true
                                 )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
 
                             if (isSelected) {
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Selected",
                                     tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .padding(top = 4.dp)
                                 )
                             }
                         }
@@ -333,106 +520,7 @@ fun MCQScreen(viewModel: MCQViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // SKIP BUTTON (LARGE TACTILE AMBER BUTTON)
-            Button(
-                onClick = { viewModel.skipCurrent() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AmberSkip.copy(alpha = 0.18f),
-                    contentColor = AmberSkip
-                ),
-                border = androidx.compose.foundation.BorderStroke(2.dp, AmberSkip)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Redo, contentDescription = null, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "SKIP",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // NAVIGATION BAR (PREV, CLEAR ANS, NEXT)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.previousQuestion() },
-                    enabled = state.currentQuestion > state.startQuestion,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Slate900,
-                        contentColor = Slate100,
-                        disabledContainerColor = Slate900.copy(alpha = 0.5f),
-                        disabledContentColor = Slate700
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Slate700)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Prev", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = { viewModel.clearCurrentAnswer() },
-                    enabled = !state.currentAnswer.isNullOrBlank(),
-                    modifier = Modifier
-                        .weight(1.2f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = RoseClear.copy(alpha = 0.15f),
-                        contentColor = RoseClear,
-                        disabledContainerColor = Slate900.copy(alpha = 0.5f),
-                        disabledContentColor = Slate700
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (!state.currentAnswer.isNullOrBlank()) RoseClear.copy(alpha = 0.4f) else Slate700
-                    )
-                ) {
-                    Icon(Icons.Default.Clear, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Clear Ans", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = { viewModel.nextQuestion() },
-                    enabled = state.currentQuestion < state.endQuestion,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Slate900,
-                        contentColor = Slate100,
-                        disabledContainerColor = Slate900.copy(alpha = 0.5f),
-                        disabledContentColor = Slate700
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Slate700)
-                ) {
-                    Text("Next", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                }
-            }
+            Spacer(modifier = Modifier.height(14.dp))
         }
     }
 
@@ -821,9 +909,9 @@ D: Venus
 
                     Text(
                         text = if (selectedFormat == "CSV") {
-                            "Columns: Question No,Question,A,B,C,D,Selected Answer,Selected Text"
+                            "Simple CSV format (1,a | 2,d | 3,b):"
                         } else {
-                            "Standard 1-A format for quick copy:"
+                            "Simple TXT format (1 a | 2 d | 3 b):"
                         },
                         color = Slate400,
                         fontSize = 12.sp

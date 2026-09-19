@@ -273,40 +273,22 @@ class MCQViewModel(application: Application) : AndroidViewModel(application) {
 
         for (q in start..end) {
             val ans = state.answers[q] ?: ""
-            val valid = if (ans in listOf("A", "B", "C", "D")) ans else ""
-            sb.append("$q-$valid\n")
+            val valid = if (ans in listOf("A", "B", "C", "D")) ans.lowercase() else "-"
+            sb.append("$q $valid\n")
         }
         return sb.toString().trimEnd()
     }
 
     fun generateCsvExport(): String {
         val state = _uiState.value
-        val sb = StringBuilder("Question No,Question,A,B,C,D,Selected Answer,Selected Text\n")
+        val sb = StringBuilder()
         val start = state.startQuestion
         val end = state.endQuestion
 
         for (q in start..end) {
-            val mcq = if (state.importedQuestions.isNotEmpty()) state.importedQuestions.getOrNull(q - 1) else null
             val ans = state.answers[q] ?: ""
-            val validAns = if (ans in listOf("A", "B", "C", "D")) ans else ""
-
-            val qText = mcq?.questionText ?: "Question $q"
-            val optA = mcq?.optionA ?: ""
-            val optB = mcq?.optionB ?: ""
-            val optC = mcq?.optionC ?: ""
-            val optD = mcq?.optionD ?: ""
-
-            val selectedText = when (validAns) {
-                "A" -> optA
-                "B" -> optB
-                "C" -> optC
-                "D" -> optD
-                else -> ""
-            }
-
-            sb.append(
-                "${q},${escapeCsv(qText)},${escapeCsv(optA)},${escapeCsv(optB)},${escapeCsv(optC)},${escapeCsv(optD)},${escapeCsv(validAns)},${escapeCsv(selectedText)}\n"
-            )
+            val valid = if (ans in listOf("A", "B", "C", "D")) ans.lowercase() else "-"
+            sb.append("$q,$valid\n")
         }
         return sb.toString().trimEnd()
     }

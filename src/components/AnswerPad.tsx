@@ -151,7 +151,7 @@ export const AnswerPad: React.FC<AnswerPadProps> = ({
 
               {/* Option Text if questions imported */}
               {optionText ? (
-                <span className="flex-1 px-2.5 sm:px-4 text-left text-xs sm:text-sm md:text-base font-medium text-slate-100 line-clamp-3 leading-snug select-text">
+                <span className="flex-1 px-2.5 sm:px-4 py-2 text-left text-xs sm:text-sm md:text-base font-medium text-slate-100 leading-snug select-text">
                   {optionText}
                 </span>
               ) : null}

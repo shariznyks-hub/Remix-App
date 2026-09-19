@@ -95,7 +95,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>TXT Format (1-B)</span>
+            <span>TXT Format (1 a)</span>
           </button>
 
           <button
@@ -108,7 +108,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             }`}
           >
             <Table className="w-4 h-4" />
-            <span>CSV Format (Excel)</span>
+            <span>CSV Format (1,a)</span>
           </button>
         </div>
 
@@ -116,7 +116,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-400">
-              Preview ({format === 'TXT' ? 'Exact ChatGPT Format' : 'Comma Separated Values'}):
+              Preview ({format === 'TXT' ? '1 a Format' : '1,a Comma Format'}):
             </span>
             <span className="text-xs text-slate-500">
               {endQuestion - startQuestion + 1} lines
@@ -130,7 +130,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </div>
 
           <p className="text-xs text-slate-400 mt-2.5">
-            Skipped and unanswered questions are left intentionally blank (e.g. <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">2-</code> or <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">2,</code>).
+            Skipped or unanswered questions are marked with <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">-</code> (e.g. <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">2 -</code> or <code className="text-amber-400 bg-slate-950 px-1 py-0.5 rounded">2,-</code>).
           </p>
         </div>
 
