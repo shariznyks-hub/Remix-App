@@ -24,14 +24,23 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: false
 
-      - name: Make android/gradlew executable
+      - name: Fix gradlew permissions and line endings
         run: |
-          chmod +x android/gradlew || true
+          sed -i 's/\r$//' android/gradlew
+          chmod +x android/gradlew
 
       - name: Build Debug APK
         working-directory: android
@@ -41,7 +50,7 @@ jobs:
       - name: Prepare APK Output
         run: |
           mkdir -p build-output
-          cp android/app/build/outputs/apk/debug/*.apk build-output/MCQ-Answer-Pad-debug.apk
+          find android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} build-output/MCQ-Answer-Pad-debug.apk \;
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
